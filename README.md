@@ -63,6 +63,7 @@ respuesta debe mostrar un usuario distinto de `root` y `uid` distinto de `0`.
 
 ## Construcción en el cluster
 
-La construye el Pipeline `construir-y-publicar` definido en `workshop-config`
-(`platform/pipelines/`), que clona este repositorio, construye la imagen con
-Buildah y la publica en el registro configurado.
+La construye el Pipeline **`ci-construir-imagen`**, definido en `workshop-config`
+(`platform/pipelines/`): clona este repositorio, construye la imagen con Buildah,
+la firma con Tekton Chains y la publica en el registro. El pipeline de CD
+(`cd-desplegar-aplicacion`) se encarga después de que Argo CD la despliegue.
