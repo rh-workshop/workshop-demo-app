@@ -183,6 +183,50 @@ const pagina = `<!DOCTYPE html>
   #controles { display: none; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
   #controles.visible { display: flex; }
 
+  /* Origen del tráfico: a qué servicio se sondea y con qué credencial. */
+  #origen { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--borde); }
+
+  .campo { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .campo:last-child { margin-bottom: 0; }
+  .campo label { font-size: 13px; color: var(--suave); min-width: 62px; }
+
+  .campo input {
+    flex: 1;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 13px;
+    padding: 7px 10px;
+    border: 1px solid var(--borde);
+    border-radius: 4px;
+    background: var(--superficie);
+    color: var(--texto);
+    min-width: 0;
+  }
+
+  .campo input:focus { outline: 2px solid var(--azul); outline-offset: -1px; border-color: var(--azul); }
+
+  /* Aviso del certificado: sin este paso el sondeo remoto falla en silencio. */
+  .aviso {
+    display: none;
+    gap: 9px;
+    margin-top: 12px;
+    font-size: 13px;
+    color: var(--suave);
+    line-height: 1.45;
+  }
+
+  .aviso.visible { display: flex; }
+
+  .aviso::before {
+    content: "";
+    width: 3px;
+    align-self: stretch;
+    background: var(--ambar);
+    border-radius: 2px;
+    flex: none;
+  }
+
+  .aviso a { color: var(--azul); }
+
   .boton {
     appearance: none;
     background: var(--superficie);
@@ -223,7 +267,8 @@ const pagina = `<!DOCTYPE html>
 
 <header>
   <h1>Panel de tráfico</h1>
-  <p>Una petición a <code>/</code> cada 200 ms. Cada celda es una respuesta.</p>
+  <p>Una petición cada 200 ms al destino indicado abajo. Cada celda es una respuesta,
+     y su color, la versión que la atendió.</p>
   <div id="pestanas" role="tablist"></div>
 </header>
 
@@ -233,6 +278,25 @@ const pagina = `<!DOCTYPE html>
     <div id="rejilla"></div>
     <div id="leyenda"></div>
     <div id="controles"></div>
+
+    <div id="origen">
+      <div class="campo">
+        <label for="url">Destino</label>
+        <input id="url" type="text" placeholder="/" value="/"
+               title="Vacío o «/» sondea este mismo pod. Para ver el reparto real, pon la URL del servicio expuesto por el gateway.">
+      </div>
+      <div class="campo">
+        <label for="token">Token</label>
+        <input id="token" type="password" placeholder="JWT (solo si la AuthPolicy lo exige)"
+               title="Se guarda en este navegador, nunca se envía a otro sitio que el destino indicado.">
+      </div>
+      <div class="aviso" id="aviso-cert">
+        <span>El gateway usa un certificado propio, y el navegador rechaza las peticiones
+        hasta que se acepte. Abre <a id="enlace-destino" href="#" target="_blank" rel="noopener">el
+        destino en otra pestaña</a>, acepta el aviso de seguridad y vuelve aquí.</span>
+      </div>
+    </div>
+
     <div id="estado"><span id="punto"></span><span id="estado-texto">Sondeando…</span></div>
   </section>
 
@@ -346,6 +410,15 @@ const explicacion= document.getElementById("explicacion");
 const controles  = document.getElementById("controles");
 const estadoTexto= document.getElementById("estado-texto");
 const punto      = document.getElementById("punto");
+const campoUrl   = document.getElementById("url");
+const campoToken = document.getElementById("token");
+
+// Destino y token sobreviven al refresco: en una sesión no se quiere volver a
+// pegar el JWT cada vez. Quedan en este navegador, no viajan a ningún sitio.
+campoUrl.value   = localStorage.getItem("panel-url")   || "/";
+campoToken.value = localStorage.getItem("panel-token") || "";
+campoUrl.oninput   = () => { localStorage.setItem("panel-url", campoUrl.value); reiniciar(); };
+campoToken.oninput = () => localStorage.setItem("panel-token", campoToken.value);
 
 const celdas = [];
 for (let i = 0; i < TOTAL; i++) {
@@ -452,25 +525,46 @@ const ACCIONES = {
   saturar() {
     estadoTexto.textContent = "Saturando el pool con 20 peticiones lentas…";
     for (let i = 0; i < 20; i++) {
-      fetch("/api/lento?s=5", { cache: "no-store" }).catch(() => {});
+      fetch(base() + "/api/lento?s=5", { cache: "no-store", headers: cabeceras() }).catch(() => {});
     }
     setTimeout(() => { estadoTexto.textContent = "Sondeando…"; }, 6000);
   },
 };
 
+// base devuelve la raíz del servicio sondeado, sin barra final. Vacío = este
+// mismo pod, que es lo útil en local; una URL completa apunta al servicio
+// expuesto por el gateway, que es donde el reparto de tráfico es REAL.
+function base() {
+  const valor = campoUrl.value.trim().replace(/\/+$/, "");
+  return valor === "" ? "" : valor;
+}
+
+function cabeceras() {
+  const token = campoToken.value.trim();
+  return token ? { Authorization: "Bearer " + token } : {};
+}
+
+const avisoCert = document.getElementById("aviso-cert");
+const enlaceDestino = document.getElementById("enlace-destino");
+
+function mostrarAvisoCert() {
+  enlaceDestino.href = base() + "/";
+  avisoCert.classList.add("visible");
+}
+
 async function sondear() {
   let clave;
   // El destino decide qué se pinta: la rejilla siempre refleja lo que se pide.
-  let destino = "/";
+  let ruta = "/";
   if (erroresPendientes > 0) {
-    destino = "/api/error";
+    ruta = "/api/error";
     erroresPendientes--;
     if (erroresPendientes === 0) {
       setTimeout(() => { estadoTexto.textContent = "Sondeando…"; }, RITMO);
     }
   }
   try {
-    const resp = await fetch(destino, { cache: "no-store" });
+    const resp = await fetch(base() + ruta, { cache: "no-store", headers: cabeceras() });
     if (!resp.ok) {
       // Incluye el 503 que devuelve el sidecar con el circuito abierto.
       clave = "error " + resp.status;
@@ -479,9 +573,14 @@ async function sondear() {
       clave = datos.version;
     }
     punto.className = "";
+    avisoCert.classList.remove("visible");
   } catch (e) {
+    // Un destino remoto que no responde suele ser el certificado propio del
+    // gateway, no un fallo del servicio: se avisa en lugar de dejar la rejilla
+    // en gris sin explicación.
     clave = "sin respuesta";
     punto.className = "parado";
+    if (base() !== "") mostrarAvisoCert();
   }
 
   const esError = clave.startsWith("error") || clave === "sin respuesta";
