@@ -55,7 +55,7 @@ class Handler(BaseHTTPRequestHandler):
             # Las cabeceras permiten comprobar que la petición atravesó el
             # gateway y que la identidad viajó en el token.
             self._responder(200, {
-                "servicio": "servicio-demo",
+                "servicio": "demo-service",
                 "version": VERSION,
                 "ruta": self.path,
                 "cabeceras_reenvio": {
@@ -67,7 +67,7 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         self._responder(200, {
-            "servicio": "servicio-demo",
+            "servicio": "demo-service",
             "version": VERSION,
             "entorno": ENTORNO,
             "mensaje": MENSAJE,
@@ -82,7 +82,7 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     print(
-        f"servicio-demo {VERSION} ({ENTORNO}) escuchando en 0.0.0.0:{PORT} "
+        f"demo-service {VERSION} ({ENTORNO}) escuchando en 0.0.0.0:{PORT} "
         f"como usuario {_usuario_actual()}",
         flush=True,
     )

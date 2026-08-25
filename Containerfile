@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# servicio-demo — imagen del servicio de demostración del flujo GitOps
+# demo-service — imagen del servicio de demostración del flujo GitOps
 #
 # Buenas prácticas que ilustra:
 #   · base certificada de Red Hat (UBI mínima), no una imagen community
@@ -8,16 +8,16 @@
 #   · orden de capas de lo que menos cambia (base) a lo que más cambia (código)
 #   · sin secretos horneados en la imagen
 #
-# La construye el Pipeline de Tekton definido en el repositorio workshop-config
-# (platform/pipelines). Para construirla en local:
-#   podman build -t servicio-demo:1.0.0 .
-#   podman run --rm -p 8080:8080 servicio-demo:1.0.0
+# La construye el Pipeline de Tekton definido en el repositorio
+# workshop-demo-app-config (platform/pipelines). Para construirla en local:
+#   podman build -t demo-service:1.0.0 .
+#   podman run --rm -p 8080:8080 demo-service:1.0.0
 #   curl -s localhost:8080 | python3 -m json.tool
 # ─────────────────────────────────────────────────────────────────────────────
 
 FROM registry.access.redhat.com/ubi9/ubi-minimal:9.6
 
-LABEL org.opencontainers.image.title="servicio-demo" \
+LABEL org.opencontainers.image.title="demo-service" \
       org.opencontainers.image.description="Servicio de demostración del flujo GitOps del workshop" \
       org.opencontainers.image.vendor="Red Hat Consulting"
 

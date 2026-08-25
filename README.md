@@ -1,4 +1,4 @@
-# workshop-app — código del servicio de demostración
+# workshop-demo-app — código del servicio de demostración
 
 Este repositorio contiene **el código** del servicio que se despliega en el
 workshop. Es deliberadamente mínimo: su valor pedagógico no está en la lógica de
@@ -13,9 +13,11 @@ código (este repositorio)
 ```
 
 La **configuración declarativa** (Deployment, Service, políticas, Pipeline) NO
-vive aquí, sino en el repositorio `workshop-config`. Esa separación entre código
-y configuración es intencional y es uno de los principios que enseña el
-workshop: Argo CD observa el repositorio de configuración, nunca el de código.
+vive aquí, sino en el repositorio `workshop-demo-app-config`. Esa separación
+entre código y configuración es intencional y es uno de los principios que
+enseña el workshop: Argo CD observa el repositorio de configuración, nunca el de
+código. La configuración de los productos de plataforma (Keycloak, Quay, el
+gateway compartido) vive a su vez en `workshop-demo-platform-config`.
 
 ## Contenido
 
@@ -53,8 +55,8 @@ falta, se referencian por el **nombre** del Secret y nunca por su valor.
 ## Ejecución en local
 
 ```bash
-podman build -t servicio-demo:1.0.0 .
-podman run --rm -p 8080:8080 servicio-demo:1.0.0
+podman build -t demo-service:1.0.0 .
+podman run --rm -p 8080:8080 demo-service:1.0.0
 curl -s localhost:8080 | python3 -m json.tool
 ```
 
@@ -63,7 +65,9 @@ respuesta debe mostrar un usuario distinto de `root` y `uid` distinto de `0`.
 
 ## Construcción en el cluster
 
-La construye el Pipeline **`ci-construir-imagen`**, definido en `workshop-config`
-(`platform/pipelines/`): clona este repositorio, construye la imagen con Buildah,
-la firma con Tekton Chains y la publica en el registro. El pipeline de CD
-(`cd-desplegar-aplicacion`) se encarga después de que Argo CD la despliegue.
+La construye el Pipeline **`ci-build-image`**, definido en
+`workshop-demo-app-config` (`platform/pipelines/`): clona este repositorio,
+construye la imagen con Buildah y la publica en el registro; después actualiza el
+overlay de configuración con el digest recién construido, que es lo que Argo CD
+sincroniza. El pipeline **`cd-deploy-application`** fuerza esa sincronización
+cuando se quiere desplegar sin esperar al sondeo de Argo CD.
