@@ -28,9 +28,10 @@ gateway compartido) vive a su vez en `workshop-demo-platform-config`.
 | `usuario.go` | Resolución del usuario efectivo bajo el UID arbitrario de OpenShift |
 | `Containerfile` | Construcción multi-etapa: `go-toolset` compila, UBI mínima ejecuta |
 
-Una **sola imagen** sirve a los tres servicios del workshop (`demo-service`,
-`canary-service` v1/v2 y `circuit-breaker-service`). Lo que cambia entre ellos
-son las variables de entorno, no el código: así el material demuestra el
+Una **sola imagen** sirve a todos los servicios del workshop: `demo-service`,
+`canary-service` v1/v2, `bluegreen-service` blue/green y la pareja
+`service1-frontend` / `service2-backend` del circuit breaker. Lo que cambia entre
+ellos son las variables de entorno, no el código: así el material demuestra el
 enrutado y las políticas sin distraer con lógica de negocio distinta.
 
 ## Endpoints
@@ -39,9 +40,10 @@ enrutado y las políticas sin distraer con lógica de negocio distinta.
 |---|---|
 | `GET /` | Identificación del servicio: versión, entorno, pod, usuario y UID |
 | `GET /health` | Sonda de vida y disponibilidad, usada por las probes de Kubernetes |
-| `GET /api/eco` | Datos de la petición recibida, para comprobar el paso por el gateway |
+| `GET /api/echo` | Datos de la petición recibida, para comprobar el paso por el gateway |
 | `GET /api/error` | Responde **500** a demanda: abre el circuit breaker |
-| `GET /api/lento?s=N` | Tarda N segundos (máx. 30): satura el pool de conexiones |
+| `GET /api/slow?s=N` | Tarda N segundos (máx. 30): satura el pool de conexiones |
+| `GET /api/call?path=/x` | Llama a `APP_UPSTREAM` y mide cuánto tarda la respuesta |
 | `GET /metrics` | Contadores de peticiones y errores en formato Prometheus |
 | `GET /ui` | Página que visualiza el reparto de tráfico en vivo |
 
@@ -61,23 +63,27 @@ hacen:
 
 - **Canary por peso de `HTTPRoute`**: aparecen dos colores mezclados en la
   proporción configurada; al cambiar el peso, cambia la mezcla.
+- **Blue-green**: un único color, y al conmutar los pesos cambia de golpe.
 - **Circuit breaker**: los cuadritos se vuelven rojos cuando el sidecar corta el
   tráfico, y vuelven al color normal cuando el circuito se cierra.
-- **Argo Rollouts**: el color se desplaza a medida que avanzan los pasos.
 
 ### Cómo se demuestra el circuit breaker
 
-La `DestinationRule` del workshop expulsa del balanceo la instancia que acumula
-**3 respuestas 5xx consecutivas** (`outlierDetection`) y corta cuando se superan
-las conexiones del `connectionPool`. Los dos endpoints de fallo provocan cada
-caso a demanda:
+El corte se demuestra con DOS servicios: `service1-frontend` llama a
+`service2-backend` a través de `/api/call`, y la `DestinationRule` vigila esa
+llamada. Con un solo servicio no se aprecia nada, porque `maxEjectionPercent: 50`
+impide expulsar la única réplica y el usuario nunca ve el corte.
 
 ```bash
-# Expulsión por errores: tres llamadas seguidas bastan.
-for i in 1 2 3; do curl -s -o /dev/null -w "%{http_code}\n" https://<host>/api/error; done
+# 1) Llamada normal: service1 responde con lo que le dio service2.
+curl -s https://<host>/api/call | python3 -m json.tool
 
-# Saturación del pool: peticiones lentas en paralelo.
-for i in $(seq 20); do curl -s -o /dev/null "https://<host>/api/lento?s=5" & done; wait
+# 2) Se pide a service2 que falle. Tras 3 errores seguidos, Envoy lo expulsa.
+for i in 1 2 3; do curl -s -o /dev/null -w "%{http_code}\n" "https://<host>/api/call?path=/api/error"; done
+
+# 3) Lo que se OBSERVA es el tiempo: antes del corte cada llamada agota el
+#    timeout de 5 s; con el circuito abierto, el 503 llega de inmediato.
+curl -s "https://<host>/api/call?path=/api/slow%3Fs=8" | python3 -m json.tool
 ```
 
 ## Variables de entorno
@@ -89,6 +95,7 @@ for i in $(seq 20); do curl -s -o /dev/null "https://<host>/api/lento?s=5" & don
 | `APP_NOMBRE` | `demo-service` | Nombre con el que se identifica el servicio |
 | `APP_ENTORNO` | `local` | Entorno lógico (`dev`, `test`) |
 | `APP_MENSAJE` | Texto genérico | Mensaje descriptivo configurable |
+| `APP_UPSTREAM` | *(vacío)* | Servicio al que llama `/api/call`; vacío = no llama a nadie |
 
 Ninguna de ellas contiene información sensible. Las credenciales, cuando hacen
 falta, se referencian por el **nombre** del Secret y nunca por su valor.

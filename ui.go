@@ -355,18 +355,19 @@ const ESCENARIOS = {
 
   circuito: {
     etiqueta: "Circuit breaker",
-    titulo: "Corte de circuito",
+    titulo: "Corte de circuito entre servicios",
     descripcion:
-      "<p>La <strong>DestinationRule</strong> de Istio vigila las respuestas. Tras " +
-      "<strong>3 errores 5xx consecutivos</strong> expulsa la instancia del balanceo " +
-      "durante 30 s (<code>outlierDetection</code>).</p>" +
-      "<p>El sidecar también corta cuando se superan las conexiones del " +
-      "<code>connectionPool</code>: entonces responde 503 sin llegar a molestar al backend.</p>",
+      "<p><strong>service1-frontend</strong> llama a <strong>service2-backend</strong>. " +
+      "La <strong>DestinationRule</strong> de OpenShift Service Mesh vigila esa llamada: " +
+      "tras <strong>3 errores 5xx seguidos</strong> deja de enviarle tráfico durante 30 s.</p>" +
+      "<p>Lo que se observa es el <strong>tiempo</strong>: mientras el destino falla, cada " +
+      "llamada agota el timeout de 5 s; con el circuito abierto, el error llega al instante. " +
+      "Eso es lo que evita que un servicio lento arrastre a los que dependen de él.</p>",
     observar: [
       "Pulsa «Provocar 3 errores»: aparecen celdas rojas.",
-      "Tras el tercero, la instancia sale del balanceo y el rojo cesa.",
-      "Con varias réplicas, el tráfico sigue por las sanas.",
-      "«Saturar el pool» abre el circuito por concurrencia, no por error.",
+      "El tiempo de respuesta cae en picado al abrirse el circuito.",
+      "Pasados 30 s, Envoy reintenta y el color vuelve.",
+      "El circuit breaker NO es Connectivity Link: es Service Mesh.",
     ],
     codigo:
       "outlierDetection:\n" +
@@ -379,28 +380,6 @@ const ESCENARIOS = {
     ],
   },
 
-  rollout: {
-    etiqueta: "Argo Rollouts",
-    titulo: "Entrega progresiva con Argo Rollouts",
-    descripcion:
-      "<p>El controlador <strong>Argo Rollouts</strong> avanza por pasos declarados: " +
-      "sube el peso, espera, y continúa solo si la versión nueva se comporta.</p>" +
-      "<p>A diferencia del canario manual, aquí el progreso lo conduce el controlador, " +
-      "y se puede <strong>promover</strong> o <strong>abortar</strong> a mitad de camino.</p>",
-    observar: [
-      "El color nuevo aparece poco a poco, no de golpe.",
-      "Se estabiliza en cada pausa: son los pasos del Rollout.",
-      "Al abortar, el color vuelve al anterior sin pasar por errores.",
-    ],
-    codigo:
-      "strategy:\n" +
-      "  canary:\n" +
-      "    steps:\n" +
-      "      - setWeight: 20\n" +
-      "      - pause: {duration: 30s}\n" +
-      "      - setWeight: 60",
-    controles: [],
-  },
 };
 
 const rejilla    = document.getElementById("rejilla");
@@ -525,7 +504,7 @@ const ACCIONES = {
   saturar() {
     estadoTexto.textContent = "Saturando el pool con 20 peticiones lentas…";
     for (let i = 0; i < 20; i++) {
-      fetch(base() + "/api/lento?s=5", { cache: "no-store", headers: cabeceras() }).catch(() => {});
+      fetch(base() + "/api/slow?s=5", { cache: "no-store", headers: cabeceras() }).catch(() => {});
     }
     setTimeout(() => { estadoTexto.textContent = "Sondeando…"; }, 6000);
   },

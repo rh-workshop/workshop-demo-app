@@ -11,9 +11,10 @@
 //
 //	GET /            identificación del servicio en JSON
 //	GET /health      sonda de vida y disponibilidad (liveness / readiness)
-//	GET /api/eco     datos de la petición (para ver el paso por el gateway)
+//	GET /api/echo    datos de la petición (para ver el paso por el gateway)
 //	GET /api/error   responde 500 a demanda (abre el circuit breaker)
-//	GET /api/lento   respuesta lenta (satura el pool de conexiones)
+//	GET /api/slow    respuesta lenta (satura el pool de conexiones)
+//	GET /api/call    llama a otro servicio (muestra el corte en cascada)
 //	GET /metrics     contadores en formato Prometheus
 //	GET /ui          página que visualiza el reparto de tráfico en vivo
 package main
@@ -37,10 +38,17 @@ var (
 	version = variable("APP_VERSION", "0.0.0-local")
 	entorno = variable("APP_ENTORNO", "local")
 	mensaje = variable("APP_MENSAJE", "Servicio de demostración del workshop")
-	// El nombre lo inyecta cada Deployment: así una sola imagen sirve para los
-	// tres servicios (demo, canary y circuit-breaker) sin anunciarse todos igual.
+	// El nombre lo inyecta cada Deployment: así una sola imagen sirve para todos
+	// los servicios del taller sin que se anuncien todos igual.
 	servicio = variable("APP_NOMBRE", "demo-service")
+	// Servicio al que llama /api/call. Vacío = este servicio no llama a nadie.
+	upstream = variable("APP_UPSTREAM", "")
 )
+
+// Cliente con timeout corto a propósito: si el destino tarda, se quiere ver el
+// fallo enseguida, no dejar la petición colgada. Sin timeout, el hilo se queda
+// esperando y el fallo en cascada tardaría minutos en apreciarse.
+var clienteUpstream = &http.Client{Timeout: 5 * time.Second}
 
 // Contadores en memoria; suficiente para enseñar el formato de exposición.
 var (
@@ -150,6 +158,55 @@ func lento(w http.ResponseWriter, r *http.Request) {
 	responder(w, http.StatusOK, cuerpo)
 }
 
+// llamar invoca a OTRO servicio y devuelve lo que responde, midiendo cuánto
+// tardó. Es lo que hace VISIBLE el circuit breaker: mientras el destino falla,
+// cada llamada agota el timeout; en cuanto Envoy abre el circuito, el 503 llega
+// de inmediato. La diferencia entre esperar y fallar rápido es justo lo que el
+// patrón aporta, y sin dos servicios no hay forma de enseñarla.
+//
+// El destino sale de APP_UPSTREAM (el Service del otro servicio); el parámetro
+// "path" elige a qué endpoint suyo se llama, para poder pedirle que falle.
+func llamar(w http.ResponseWriter, r *http.Request) {
+	if upstream == "" {
+		responder(w, http.StatusNotImplemented, map[string]any{
+			"error": "este servicio no tiene APP_UPSTREAM configurado",
+		})
+		return
+	}
+
+	ruta := r.URL.Query().Get("path")
+	if ruta == "" {
+		ruta = "/"
+	}
+
+	inicio := time.Now()
+	resp, err := clienteUpstream.Get(upstream + ruta)
+	transcurrido := time.Since(inicio)
+
+	cuerpo := identidad()
+	cuerpo["upstream"] = upstream + ruta
+	cuerpo["duracion_ms"] = transcurrido.Milliseconds()
+
+	if err != nil {
+		// Sin respuesta: o el destino no contesta, o el sidecar cortó la llamada.
+		errores.Add(1)
+		cuerpo["error"] = err.Error()
+		responder(w, http.StatusBadGateway, cuerpo)
+		return
+	}
+	defer resp.Body.Close()
+
+	cuerpo["upstream_status"] = resp.StatusCode
+	// El corte de Envoy llega como 503 SIN haber tocado el destino: por eso se
+	// distingue del 500 que devuelve el propio servicio cuando falla de verdad.
+	if resp.StatusCode >= 500 {
+		errores.Add(1)
+		responder(w, http.StatusBadGateway, cuerpo)
+		return
+	}
+	responder(w, http.StatusOK, cuerpo)
+}
+
 func metricas(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 	fmt.Fprintf(w, "# HELP demo_peticiones_total Peticiones atendidas por el pod.\n")
@@ -176,9 +233,10 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", raiz)
 	mux.HandleFunc("/health", salud)
-	mux.HandleFunc("/api/eco", eco)
+	mux.HandleFunc("/api/echo", eco)
 	mux.HandleFunc("/api/error", fallo)
-	mux.HandleFunc("/api/lento", lento)
+	mux.HandleFunc("/api/slow", lento)
+	mux.HandleFunc("/api/call", llamar)
 	mux.HandleFunc("/metrics", metricas)
 	mux.HandleFunc("/ui", interfaz)
 
