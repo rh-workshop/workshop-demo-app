@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/rh-workshop/workshop-demo-app/internal/config"
+	"github.com/rh-workshop/workshop-demo-app/shared/config"
 )
 
 // Server agrupa la configuración, los datos y los contadores de la API.

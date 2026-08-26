@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# Containerfile ÚNICO del monorepo: construye cualquier binario de cmd/<APP>.
+# Containerfile ÚNICO del monorepo: construye cualquiera de las apps del repo.
 #
 # El argumento APP elige la aplicación (por defecto, demo-service):
 #   podman build -t demo-service:1.0.0 .
@@ -33,10 +33,11 @@ WORKDIR /opt/app-root/src
 COPY go.mod ./
 RUN go mod download
 
-# El código: cmd/ (cableado del binario) e internal/ (paquetes del servicio,
-# incluidos los assets del panel, que van embebidos con go:embed).
-COPY cmd/ cmd/
-COPY internal/ internal/
+# Cada app vive en su propia carpeta y "shared/" reúne lo que comparten.
+# Se copia el árbol entero porque go build necesita resolver los imports.
+COPY shared/ shared/
+COPY demo-service/ demo-service/
+COPY api-service/ api-service/
 
 # CGO_ENABLED=0 produce un binario estático, sin dependencias de bibliotecas
 # del sistema: por eso la imagen final puede ser una UBI mínima.
@@ -47,7 +48,7 @@ COPY internal/ internal/
 RUN CGO_ENABLED=0 GOOS=linux go build \
         -trimpath \
         -ldflags="-s -w" \
-        -o /tmp/service "./cmd/${APP}"
+        -o /tmp/service "./${APP}"
 
 # ── Etapa 2: imagen final ────────────────────────────────────────────────────
 FROM registry.access.redhat.com/ubi9/ubi-minimal:9.8

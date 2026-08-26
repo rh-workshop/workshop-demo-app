@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/rh-workshop/workshop-demo-app/internal/config"
+	"github.com/rh-workshop/workshop-demo-app/shared/config"
 )
 
 // Servidor agrupa la configuración y el estado en memoria de los handlers.

@@ -32,9 +32,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/rh-workshop/workshop-demo-app/internal/apiservice"
-	"github.com/rh-workshop/workshop-demo-app/internal/config"
-	"github.com/rh-workshop/workshop-demo-app/internal/identity"
+	"github.com/rh-workshop/workshop-demo-app/api-service/internal/apiservice"
+	"github.com/rh-workshop/workshop-demo-app/shared/config"
+	"github.com/rh-workshop/workshop-demo-app/shared/identity"
 )
 
 func main() {
