@@ -1,8 +1,18 @@
-# workshop-demo-app — código del servicio de demostración
+# workshop-demo-app — monorepo de las aplicaciones del workshop
 
-Este repositorio contiene **el código** del servicio que se despliega en el
-workshop. Es deliberadamente mínimo: su valor pedagógico no está en la lógica de
-negocio, sino en hacer visible el ciclo completo de entrega.
+Este repositorio es un **monorepo**: contiene **el código de todas las
+aplicaciones** que se despliegan en el workshop. Hoy son dos, cada una con su
+punto de entrada en `cmd/`:
+
+| Aplicación | Propósito |
+|---|---|
+| `cmd/demo-service` | Servicio de demostración del flujo GitOps y de los patrones de despliegue (canary, blue-green, circuit breaker) |
+| `cmd/api-service` | API REST de negocio (cuentas y pagos): propagación de identidad desde el gateway y códigos de estado reales |
+
+Todas comparten un único `go.mod`, un único `Containerfile` (el argumento `APP`
+elige qué binario se construye) y los paquetes comunes de `internal/`. El valor
+pedagógico no está en la lógica de negocio, sino en hacer visible el ciclo
+completo de entrega.
 
 ```
 código (este repositorio)
@@ -19,25 +29,62 @@ enseña el workshop: Argo CD observa el repositorio de configuración, nunca el 
 código. La configuración de los productos de plataforma (Keycloak, Quay, el
 gateway compartido) vive a su vez en `workshop-demo-platform-config`.
 
-## Estructura del repositorio
+## Estructura del monorepo
 
-Sigue el layout estándar de Go: `cmd/` contiene el punto de entrada (solo
-cableado) e `internal/` los paquetes del servicio, separados por
+Sigue el layout estándar de Go: `cmd/<app>/main.go` es el punto de entrada de
+cada aplicación (solo cableado) e `internal/` los paquetes, separados por
 responsabilidad. Todo usa la biblioteca estándar, sin dependencias.
 
-| Ruta | Propósito |
-|---|---|
-| `cmd/demo-service/main.go` | Cableado: configuración, construcción del servidor, arranque y parada ordenada |
-| `internal/config/` | Carga de la configuración desde variables de entorno |
-| `internal/server/` | Construcción del servidor HTTP: rutas, handlers y métricas |
-| `internal/identity/` | Resolución del usuario efectivo bajo el UID arbitrario de OpenShift |
-| `internal/ui/` | Panel de visualización del reparto de tráfico |
-| `internal/ui/assets/` | HTML, CSS y JS del panel, embebidos en el binario con `go:embed` |
-| `Containerfile` | Construcción multi-etapa: `go-toolset` compila, UBI mínima ejecuta |
+```
+cmd/
+  demo-service/main.go      punto de entrada del servicio de demostración
+  api-service/main.go       punto de entrada de la API de negocio
+internal/
+  config/                   COMÚN — configuración desde variables de entorno
+  identity/                 COMÚN — usuario efectivo bajo el UID arbitrario de OpenShift
+  server/                   demo-service — rutas, handlers y métricas del demo
+  ui/                       demo-service — panel de reparto de tráfico (go:embed)
+  apiservice/               api-service — store en memoria, handlers y contadores
+Containerfile               ÚNICO para todas las apps: --build-arg APP=<app>
+go.mod                      un solo módulo para todo el monorepo
+```
+
+**Criterio de separación entre lo común y lo específico:**
+
+- `internal/config` e `internal/identity` son **comunes**: no saben nada de
+  ningún endpoint, solo leen el entorno de ejecución (variables y UID). Ambas
+  apps los importan tal cual.
+- `internal/server` e `internal/ui` son **propios de demo-service**: sus
+  handlers *son* la demo (eco, error a demanda, latencia, panel). Compartirlos
+  obligaría a la API de negocio a arrastrar endpoints que no forman parte de su
+  contrato.
+- `internal/apiservice` es **propio de api-service**: modelo de datos, reglas
+  de validación (422), enrutado con métodos (405) y sus propios contadores.
+  Cada app expone su `/health` y su `/metrics` porque son parte de su contrato,
+  no infraestructura común.
 
 Los assets del panel son ficheros reales (editables como HTML/CSS/JS normales),
 pero viajan **embebidos** en el binario: la imagen final sigue siendo un único
 ejecutable, sin ficheros estáticos ni volúmenes.
+
+## Cómo se añade una aplicación nueva
+
+1. **Crear el punto de entrada**: `cmd/<nueva-app>/main.go`, solo cableado
+   (cargar `internal/config`, construir el servidor, arranque y parada
+   ordenada). Copiar `cmd/api-service/main.go` como plantilla.
+2. **Crear su paquete**: `internal/<nuevaapp>/` con los handlers y el estado
+   propios. Reutilizar `internal/config` e `internal/identity`; no tocar los
+   paquetes de otras apps.
+3. **Comprobar en local**: `go build ./... && go vet ./...` y
+   `go run ./cmd/<nueva-app>`.
+4. **La imagen ya sabe construirla** — el `Containerfile` es único:
+   `podman build -t <nueva-app>:1.0.0 --build-arg APP=<nueva-app> .`
+5. **Declarar su despliegue** en `workshop-demo-app-config`: carpeta
+   `apps/<nueva-app>/` (base + overlays + gateway-route + image-puller),
+   sus Applications en `bootstrap/applications/` y, si usa un namespace nuevo,
+   añadirlo a los `destinations` del AppProject `workshop-platform`.
+6. **Construir en el cluster**: un `PipelineRun` de `ci-build-image` con el
+   parámetro `build-args: ["APP=<nueva-app>"]` y el `overlay-path` de la app.
 
 Una **sola imagen** sirve a todos los servicios del workshop: `demo-service`,
 `canary-service` v1/v2, `bluegreen-service` blue/green y la pareja
@@ -45,7 +92,27 @@ Una **sola imagen** sirve a todos los servicios del workshop: `demo-service`,
 ellos son las variables de entorno, no el código: así el material demuestra el
 enrutado y las políticas sin distraer con lógica de negocio distinta.
 
-## Endpoints
+## Endpoints de api-service
+
+| Método y ruta | Respuesta |
+|---|---|
+| `GET /api/v1/accounts` | **200** — cuentas del cliente autenticado (o todas, avisando, si no llega identidad) |
+| `GET /api/v1/accounts/{id}` | **200** — la cuenta pedida; **404** si no existe |
+| `POST /api/v1/payments` | **201** con cabecera `Location`; **422** si el cuerpo es inválido |
+| `GET /api/v1/payments/{id}` | **200** — el pago pedido; **404** si no existe |
+| `GET /health` | Sonda de vida y disponibilidad |
+| `GET /metrics` | Contadores en formato Prometheus |
+
+Un método no permitido sobre una ruta del contrato responde **405** con la
+cabecera `Allow`; cualquier ruta fuera del contrato responde **404**.
+
+La API lee la cabecera **`x-identidad`** que inyecta la AuthPolicy de
+Connectivity Link tras validar el JWT, y la refleja en todas sus respuestas
+(bloque `identity`). Si la cabecera no llega — por ejemplo accediendo al
+Service por dentro del cluster, sin pasar por el gateway — la respuesta lo dice
+explícitamente: así se enseña la propagación de identidad.
+
+## Endpoints de demo-service
 
 | Método y ruta | Respuesta |
 |---|---|
@@ -114,9 +181,15 @@ falta, se referencian por el **nombre** del Secret y nunca por su valor.
 ## Ejecución en local
 
 ```bash
+# demo-service (APP por defecto)
 podman build -t demo-service:1.0.0 .
 podman run --rm -p 8080:8080 demo-service:1.0.0
 curl -s localhost:8080 | python3 -m json.tool
+
+# api-service — mismo Containerfile, cambia el argumento APP
+podman build -t api-service:1.0.0 --build-arg APP=api-service .
+podman run --rm -p 8080:8080 api-service:1.0.0
+curl -s localhost:8080/api/v1/accounts | python3 -m json.tool
 ```
 
 Y para ver la página de reparto de tráfico: `http://localhost:8080/ui`.
