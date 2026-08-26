@@ -1,0 +1,291 @@
+  :root {
+    --tinta:      #151515;
+    --superficie: #ffffff;
+    --borde:      #d2d2d2;
+    --texto:      #151515;
+    --suave:      #6a6e73;
+    --fondo:      #f5f5f5;
+    --rojo:       #ee0000;   /* marca y errores, nunca decoración */
+    --azul:       #0066cc;
+    --verde:      #3e8635;
+    --ambar:      #f0ab00;
+    --morado:     #6753ac;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--fondo);
+    color: var(--texto);
+    font-family: Inter, system-ui, -apple-system, sans-serif;
+    font-size: 17px;
+    line-height: 1.55;
+  }
+
+  code, .mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
+
+  header {
+    background: var(--superficie);
+    border-bottom: 1px solid var(--borde);
+    padding: 22px 36px 0;
+  }
+
+  h1 {
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -0.025em;
+    margin: 0 0 4px;
+  }
+
+  header p { margin: 0 0 20px; color: var(--suave); font-size: 16px; max-width: 72ch; }
+
+  /* Selector de escenario: es lo primero que se decide al presentar. */
+  #pestanas { display: flex; gap: 6px; }
+
+  .pestana {
+    appearance: none;
+    background: none;
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-radius: 6px 6px 0 0;
+    padding: 12px 24px;
+    font: inherit;
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.022em;
+    color: var(--suave);
+    cursor: pointer;
+    position: relative;
+    top: 1px;
+  }
+
+  .pestana:hover { color: var(--texto); }
+  .pestana:focus-visible { outline: 2px solid var(--azul); outline-offset: -2px; }
+
+  .pestana[aria-selected="true"] {
+    background: var(--fondo);
+    border-color: var(--borde);
+    color: var(--texto);
+    font-weight: 700;
+  }
+
+  main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 400px;
+    gap: 24px;
+    padding: 24px 36px 36px;
+    align-items: start;
+  }
+
+  .panel {
+    background: var(--superficie);
+    border: 1px solid var(--borde);
+    border-radius: 8px;
+    padding: 24px;
+  }
+
+  h2 {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--suave);
+    margin: 0 0 16px;
+  }
+
+  /* Insignia del producto que gobierna el escenario: siempre a la vista. */
+  .producto {
+    display: inline-block;
+    border: 1px solid var(--borde);
+    border-radius: 999px;
+    padding: 4px 14px;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 14px;
+  }
+
+  .producto.cl   { color: var(--azul); }
+  .producto.mesh { color: var(--morado); }
+
+  #rejilla {
+    display: grid;
+    grid-template-columns: repeat(24, 1fr);
+    gap: 4px;
+    margin-bottom: 20px;
+  }
+
+  .celda {
+    aspect-ratio: 1;
+    border-radius: 3px;
+    background: #ebebeb;
+    transition: background 120ms ease-out;
+  }
+
+  #leyenda { display: flex; flex-wrap: wrap; gap: 10px 26px; }
+
+  .clave { display: flex; align-items: center; gap: 10px; font-size: 17px; }
+  .muestra { width: 15px; height: 15px; border-radius: 3px; flex: none; }
+  .clave .cuenta { color: var(--suave); font-variant-numeric: tabular-nums; }
+  .clave .pct { font-weight: 700; font-variant-numeric: tabular-nums; font-size: 19px; }
+
+  /* Métrica de latencia: la lectura clave del circuit breaker. */
+  #latencia { display: none; margin-bottom: 20px; }
+  #latencia.visible { display: block; }
+
+  #lat-cifras { display: flex; align-items: baseline; gap: 28px; flex-wrap: wrap; margin-bottom: 10px; }
+
+  #lat-ultima {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 52px;
+    font-weight: 600;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  #lat-ultima.mal { color: var(--rojo); }
+  .lat-etiqueta { color: var(--suave); font-size: 15px; }
+  #lat-media { font-size: 17px; color: var(--suave); font-variant-numeric: tabular-nums; }
+  #lat-media strong { color: var(--texto); font-weight: 700; }
+
+  /* Barras: una por llamada, altura proporcional al tiempo (tope 5 s del timeout). */
+  #lat-barras {
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    height: 120px;
+    border: 1px solid var(--borde);
+    border-radius: 6px;
+    padding: 6px;
+    background: var(--fondo);
+  }
+
+  .lat-barra { flex: 1; min-height: 3px; border-radius: 2px 2px 0 0; background: var(--suave); }
+  .lat-barra.mal { background: var(--rojo); }
+
+  #lat-eje { display: flex; justify-content: space-between; font-size: 13px; color: var(--suave); margin-top: 4px; }
+
+  /* Explicación del escenario activo. */
+  #explicacion p { margin: 0 0 14px; font-size: 16px; }
+  #explicacion p:last-child { margin-bottom: 0; }
+  #explicacion strong { font-weight: 700; }
+
+  .titulo-escenario {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.022em;
+    margin: 0 0 12px;
+  }
+
+  .observar {
+    background: var(--fondo);
+    border: 1px solid var(--borde);
+    border-radius: 6px;
+    padding: 14px 16px;
+    margin-top: 16px;
+  }
+
+  .observar h3 {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--suave);
+    margin: 0 0 10px;
+  }
+
+  .observar ul { margin: 0; padding-left: 20px; list-style: disc; }
+  .observar li { margin-bottom: 8px; font-size: 16px; }
+  .observar li:last-child { margin-bottom: 0; }
+  .observar li::marker { color: var(--suave); font-size: 0.8em; }
+
+  pre {
+    background: var(--tinta);
+    color: #f0f0f0;
+    border-radius: 6px;
+    padding: 14px 16px;
+    margin: 14px 0 0;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 14.5px;
+    line-height: 1.6;
+    overflow-x: auto;
+  }
+
+  /* Controles para provocar el escenario desde el propio panel. */
+  #controles { display: none; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+  #controles.visible { display: flex; }
+
+  /* Origen del tráfico: a qué servicio se sondea y con qué credencial. */
+  #origen { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--borde); }
+
+  .campo { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+  .campo:last-child { margin-bottom: 0; }
+  .campo label { font-size: 15px; color: var(--suave); min-width: 66px; }
+
+  .campo input {
+    flex: 1;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 15px;
+    padding: 9px 12px;
+    border: 1px solid var(--borde);
+    border-radius: 6px;
+    background: var(--superficie);
+    color: var(--texto);
+    min-width: 0;
+  }
+
+  .campo input:focus { outline: 2px solid var(--azul); outline-offset: -1px; border-color: var(--azul); }
+
+  /* Aviso del certificado: sin este paso el sondeo remoto falla en silencio. */
+  .aviso {
+    display: none;
+    margin-top: 14px;
+    padding: 12px 14px;
+    border: 1px solid var(--ambar);
+    border-radius: 6px;
+    background: #fdf7e7;
+    font-size: 15px;
+    color: var(--texto);
+    line-height: 1.5;
+  }
+
+  .aviso.visible { display: block; }
+  .aviso strong { font-weight: 700; }
+  .aviso a { color: var(--azul); }
+
+  .boton {
+    appearance: none;
+    background: var(--superficie);
+    border: 1px solid var(--borde);
+    border-radius: 6px;
+    padding: 10px 18px;
+    font: inherit;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--texto);
+    cursor: pointer;
+  }
+
+  .boton:hover { border-color: var(--suave); }
+  .boton:active { background: var(--fondo); }
+  .boton:focus-visible { outline: 2px solid var(--azul); outline-offset: 1px; }
+  .boton[aria-pressed="true"] { background: var(--tinta); color: var(--superficie); border-color: var(--tinta); }
+  .boton.peligro { color: var(--rojo); border-color: #f5c2c2; }
+  .boton.peligro:hover { border-color: var(--rojo); }
+
+  #estado {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-size: 15px;
+    color: var(--suave);
+    margin-top: 16px;
+  }
+
+  #punto { width: 9px; height: 9px; border-radius: 50%; background: var(--verde); flex: none; }
+  #punto.parado { background: var(--suave); }
+
+  @media (max-width: 1100px) {
+    main { grid-template-columns: 1fr; }
+    #rejilla { grid-template-columns: repeat(20, 1fr); }
+  }

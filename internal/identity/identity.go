@@ -1,4 +1,5 @@
-package main
+// Package identity resuelve el usuario efectivo bajo el UID arbitrario de OpenShift.
+package identity
 
 import (
 	"bufio"
@@ -7,13 +8,13 @@ import (
 	"strings"
 )
 
-// usuario devuelve el nombre del usuario efectivo; el UID numérico si no tiene
+// Usuario devuelve el nombre del usuario efectivo; el UID numérico si no tiene
 // nombre asignado.
 //
 // OpenShift arranca los contenedores con un UID ARBITRARIO que no existe en
 // /etc/passwd, así que os/user falla en ese caso (y además arrastra cgo, que
 // impediría compilar un binario estático). Se lee el fichero directamente.
-func usuario() string {
+func Usuario() string {
 	uid := os.Getuid()
 
 	fichero, err := os.Open("/etc/passwd")

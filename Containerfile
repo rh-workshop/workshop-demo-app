@@ -24,7 +24,10 @@ WORKDIR /opt/app-root/src
 COPY go.mod ./
 RUN go mod download
 
-COPY *.go ./
+# El código: cmd/ (cableado del binario) e internal/ (paquetes del servicio,
+# incluidos los assets del panel, que van embebidos con go:embed).
+COPY cmd/ cmd/
+COPY internal/ internal/
 
 # CGO_ENABLED=0 produce un binario estático, sin dependencias de bibliotecas
 # del sistema: por eso la imagen final puede ser una UBI mínima.
@@ -33,7 +36,7 @@ COPY *.go ./
 RUN CGO_ENABLED=0 GOOS=linux go build \
         -trimpath \
         -ldflags="-s -w" \
-        -o /tmp/demo-service .
+        -o /tmp/demo-service ./cmd/demo-service
 
 # ── Etapa 2: imagen final ────────────────────────────────────────────────────
 FROM registry.access.redhat.com/ubi9/ubi-minimal:9.8

@@ -19,14 +19,25 @@ enseña el workshop: Argo CD observa el repositorio de configuración, nunca el 
 código. La configuración de los productos de plataforma (Keycloak, Quay, el
 gateway compartido) vive a su vez en `workshop-demo-platform-config`.
 
-## Contenido
+## Estructura del repositorio
 
-| Archivo | Propósito |
+Sigue el layout estándar de Go: `cmd/` contiene el punto de entrada (solo
+cableado) e `internal/` los paquetes del servicio, separados por
+responsabilidad. Todo usa la biblioteca estándar, sin dependencias.
+
+| Ruta | Propósito |
 |---|---|
-| `main.go` | Servidor HTTP y endpoints (biblioteca estándar de Go, sin dependencias) |
-| `ui.go` | Página de visualización del reparto de tráfico, embebida en el binario |
-| `usuario.go` | Resolución del usuario efectivo bajo el UID arbitrario de OpenShift |
+| `cmd/demo-service/main.go` | Cableado: configuración, construcción del servidor, arranque y parada ordenada |
+| `internal/config/` | Carga de la configuración desde variables de entorno |
+| `internal/server/` | Construcción del servidor HTTP: rutas, handlers y métricas |
+| `internal/identity/` | Resolución del usuario efectivo bajo el UID arbitrario de OpenShift |
+| `internal/ui/` | Panel de visualización del reparto de tráfico |
+| `internal/ui/assets/` | HTML, CSS y JS del panel, embebidos en el binario con `go:embed` |
 | `Containerfile` | Construcción multi-etapa: `go-toolset` compila, UBI mínima ejecuta |
+
+Los assets del panel son ficheros reales (editables como HTML/CSS/JS normales),
+pero viajan **embebidos** en el binario: la imagen final sigue siendo un único
+ejecutable, sin ficheros estáticos ni volúmenes.
 
 Una **sola imagen** sirve a todos los servicios del workshop: `demo-service`,
 `canary-service` v1/v2, `bluegreen-service` blue/green y la pareja
@@ -116,7 +127,7 @@ respuesta debe mostrar un usuario distinto de `root` y `uid` distinto de `0`.
 Sin contenedor, con Go instalado:
 
 ```bash
-APP_VERSION=1.0.0-local go run .
+APP_VERSION=1.0.0-local go run ./cmd/demo-service
 ```
 
 ## Construcción en el cluster

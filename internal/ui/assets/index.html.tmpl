@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panel de tráfico — workshop de contenedores y OpenShift</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+{{.Styles}}</style>
+</head>
+<body>
+
+<header>
+  <h1>Panel de tráfico</h1>
+  <p>Peticiones continuas al destino indicado abajo. Cada celda es una respuesta;
+     su color indica la versión que la atendió, y el rojo, un error.</p>
+  <div id="pestanas" role="tablist" aria-label="Escenario de demostración"></div>
+</header>
+
+<main>
+  <section class="panel" role="tabpanel" id="panel-vivo" aria-labelledby="pestana-activa">
+    <h2 id="titulo-vivo">Respuestas en vivo</h2>
+
+    <div id="latencia" aria-label="Tiempo de respuesta de las últimas llamadas">
+      <div id="lat-cifras">
+        <div>
+          <span id="lat-ultima" aria-live="off">—</span>
+          <span class="lat-etiqueta">ms la última llamada</span>
+        </div>
+        <div id="lat-media">media de las últimas 20: <strong>—</strong> ms</div>
+      </div>
+      <div id="lat-barras" role="img" aria-label="Barras con el tiempo de cada llamada"></div>
+      <div id="lat-eje"><span>llamadas más antiguas</span><span>escala 0–5000 ms (timeout)</span></div>
+    </div>
+
+    <div id="rejilla" role="img" aria-label="Rejilla de respuestas: una celda por respuesta, coloreada por versión"></div>
+    <div id="leyenda" aria-live="off"></div>
+    <div id="controles"></div>
+
+    <div id="origen">
+      <div class="campo">
+        <label for="url">Destino</label>
+        <input id="url" type="text" placeholder="/" value="/"
+               title="Vacío o «/» sondea este mismo pod. Para ver el reparto real, pon la URL del servicio expuesto por el gateway.">
+      </div>
+      <div class="campo">
+        <label for="token">Token</label>
+        <input id="token" type="password" placeholder="JWT (solo si la AuthPolicy lo exige)"
+               title="Se guarda en este navegador, nunca se envía a otro sitio que el destino indicado.">
+      </div>
+      <div class="aviso" id="aviso-cert">
+        <strong>Certificado sin aceptar.</strong> El gateway usa un certificado propio y el
+        navegador rechaza las peticiones hasta aceptarlo. Abre
+        <a id="enlace-destino" href="#" target="_blank" rel="noopener">el destino en otra
+        pestaña</a>, acepta el aviso de seguridad y vuelve aquí.
+      </div>
+    </div>
+
+    <div id="estado" aria-live="polite"><span id="punto"></span><span id="estado-texto">Sondeando…</span></div>
+  </section>
+
+  <aside class="panel" id="explicacion"></aside>
+</main>
+
+<script>
+{{.Script}}</script>
+</body>
+</html>
