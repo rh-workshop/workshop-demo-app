@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/rh-workshop/workshop-demo-app/shared/identity"
+	"github.com/rh-workshop/workshop-demo-app/internal/identity"
 )
 
 // responder serializa el cuerpo como JSON con el código indicado.

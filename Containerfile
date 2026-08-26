@@ -33,9 +33,11 @@ WORKDIR /opt/app-root/src
 COPY go.mod ./
 RUN go mod download
 
-# Cada app vive en su propia carpeta y "shared/" reúne lo que comparten.
+# Cada app vive en su propia carpeta e "internal/" reúne lo común a todas
+# (disposición oficial de Go para varios programas en un módulo; al ser
+# "internal", el compilador impide que otro módulo lo importe).
 # Se copia el árbol entero porque go build necesita resolver los imports.
-COPY shared/ shared/
+COPY internal/ internal/
 COPY demo-service/ demo-service/
 COPY api-service/ api-service/
 
@@ -56,9 +58,15 @@ FROM registry.access.redhat.com/ubi9/ubi-minimal:9.8
 # Se re-declara para que las LABEL reflejen la app realmente construida.
 ARG APP=demo-service
 
+# Commit del monorepo con el que se construyó la imagen; lo inyecta el pipeline.
+# Como el módulo es único, este commit ES la versión exacta del código común
+# (internal/) que lleva el binario: responde "¿qué versión corre desplegada?".
+ARG GIT_COMMIT=desconocido
+
 LABEL org.opencontainers.image.title="${APP}" \
       org.opencontainers.image.description="Aplicación ${APP} del monorepo del workshop GitOps" \
       org.opencontainers.image.source="https://github.com/rh-workshop/workshop-demo-app" \
+      org.opencontainers.image.revision="${GIT_COMMIT}" \
       org.opencontainers.image.vendor="Red Hat Consulting"
 
 WORKDIR /app

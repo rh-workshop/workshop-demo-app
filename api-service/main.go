@@ -33,8 +33,8 @@ import (
 	"time"
 
 	"github.com/rh-workshop/workshop-demo-app/api-service/internal/apiservice"
-	"github.com/rh-workshop/workshop-demo-app/shared/config"
-	"github.com/rh-workshop/workshop-demo-app/shared/identity"
+	"github.com/rh-workshop/workshop-demo-app/internal/config"
+	"github.com/rh-workshop/workshop-demo-app/internal/identity"
 )
 
 func main() {

@@ -10,8 +10,8 @@ carpeta de primer nivel, para que se vea de un vistazo qué aplicaciones hay:
 | `api-service/` | API REST de negocio (cuentas y pagos): propagación de identidad desde el gateway y códigos de estado reales |
 
 Todas comparten un único `go.mod`, un único `Containerfile` (el argumento `APP`
-elige qué aplicación se construye) y los paquetes de `shared/`. El valor
-pedagógico no está en la lógica de negocio, sino en hacer visible el ciclo
+elige qué aplicación se construye) y los paquetes comunes de `internal/`. El
+valor pedagógico no está en la lógica de negocio, sino en hacer visible el ciclo
 completo de entrega.
 
 ```
@@ -32,9 +32,14 @@ gateway compartido) vive a su vez en `workshop-demo-platform-config`.
 ## Estructura del monorepo
 
 Cada aplicación es una **carpeta de primer nivel** con su `main.go` y su propio
-`internal/`; `shared/` reúne solo lo que de verdad comparten. Así, al abrir el
-repositorio, las aplicaciones que existen se ven sin entrar en ninguna carpeta.
-Todo usa la biblioteca estándar, sin dependencias.
+`internal/`; el `internal/` **de la raíz** reúne solo lo que de verdad
+comparten. Es la disposición que documenta Go para un módulo con varios
+programas ([go.dev/doc/modules/layout](https://go.dev/doc/modules/layout):
+*"A top-level `internal` directory can contain shared packages used by all
+commands in the repository"*), y al llamarse `internal` el **compilador**
+impide que ningún otro módulo lo importe: lo común es privado del monorepo por
+construcción, no por convención. Todo usa la biblioteca estándar, sin
+dependencias.
 
 ```
 demo-service/               servicio de demostración de los patrones de despliegue
@@ -44,25 +49,58 @@ demo-service/               servicio de demostración de los patrones de desplie
 api-service/                API REST de negocio
   main.go                     punto de entrada (solo cableado)
   internal/apiservice/        store en memoria, handlers y contadores
-shared/                     lo COMÚN a todas las aplicaciones
+internal/                   lo COMÚN a todas las aplicaciones (privado del módulo)
   config/                     configuración desde variables de entorno
   identity/                   usuario efectivo bajo el UID arbitrario de OpenShift
 Containerfile               ÚNICO para todas las apps: --build-arg APP=<app>
 go.mod                      un solo módulo para todo el monorepo
 ```
 
-**Criterio de separación entre lo común y lo específico:**
+### Cuándo compartir y cuándo duplicar
 
-- `shared/config` y `shared/identity` son **comunes**: no saben nada de ningún
-  endpoint, solo leen el entorno de ejecución (variables y UID). Ambas apps los
-  importan tal cual.
-- El `internal/` de cada aplicación es **suyo y sólo suyo**: los handlers de
-  demo-service *son* la demo (eco, error a demanda, latencia, panel), y los de
-  api-service son su contrato de negocio (validación 422, métodos 405). Un
-  paquete solo sube a `shared/` cuando lo necesitan dos apps y no habla de
-  endpoints concretos.
-- Cada app expone su `/health` y su `/metrics` porque son parte de su contrato,
-  no infraestructura común.
+Go tiene un proverbio célebre: *"a little copying is better than a little
+dependency"* (Rob Pike, [Go Proverbs](https://go-proverbs.github.io/),
+Gopherfest 2015). No es una prohibición de compartir: es una advertencia contra
+**añadir una dependencia** —con su versión, su ciclo de vida y su acoplamiento—
+para ahorrarse unas líneas. El criterio que aplica este monorepo:
+
+- **Se comparte** (`internal/` de la raíz) solo lo que necesitan **dos o más
+  apps** y habla del *entorno de ejecución*, nunca de endpoints: leer variables
+  (`internal/config`) y resolver el usuario bajo el UID arbitrario de OpenShift
+  (`internal/identity`). Ambas apps importan ambos paquetes.
+- **No se comparte** nada por si acaso: el `internal/` de cada aplicación es
+  suyo y solo suyo. Los handlers de demo-service *son* la demo (eco, error a
+  demanda, latencia, panel) y los de api-service son su contrato de negocio
+  (validación 422, métodos 405). Cada app expone su `/health` y su `/metrics`
+  porque son parte de su contrato, no infraestructura común.
+- **Se preferiría duplicar** si el código fuera a divergir por app, si lo usara
+  una sola, o si compartirlo obligara a coordinar equipos o repositorios
+  distintos. Ninguna de las tres cosas ocurre aquí.
+
+**¿Y el despliegue? "Si cambio lo común, ¿no conviven dos versiones?"** La
+respuesta del monorepo tiene tres piezas:
+
+1. `internal/` **no se despliega**: se compila dentro de cada binario. No hay
+   artefacto compartido en ejecución ni "versión del shared" que instalar.
+2. Como el módulo es único, la versión del código común que lleva una imagen
+   **es el commit del monorepo** con el que se construyó. El pipeline lo
+   estampa en la etiqueta OCI `org.opencontainers.image.revision`
+   (`oc image info <imagen>` la muestra): siempre se sabe qué lleva cada
+   imagen desplegada.
+3. La regla operativa es la de todo monorepo *trunk-based* (es como Google
+   gobierna su repo único: una sola versión en HEAD y se reconstruyen los
+   afectados — Potvin y Levenberg, *"Why Google Stores Billions of Lines of
+   Code in a Single Repository"*, CACM 2016): **un cambio en `internal/`
+   afecta a TODAS las apps y obliga a reconstruirlas todas** (un `PipelineRun`
+   por app). Entre medias pueden convivir imágenes de commits distintos —igual
+   que conviven durante cualquier rolling update— pero es un estado transitorio,
+   visible en la etiqueta `revision`, no una deriva permanente.
+
+Lo que **no** se hace es versionar lo común como módulo Go aparte con semver:
+para 82 líneas añadiría publicación, etiquetado y `go get` en cada cambio, y
+además **institucionalizaría** el desfase (cada app anclada a una versión vieja
+de lo común) en vez de eliminarlo. Esa herramienta es para compartir código
+**entre repositorios**; dentro de un monorepo, la fuente de verdad es HEAD.
 
 Los assets del panel son ficheros reales (editables como HTML/CSS/JS normales),
 pero viajan **embebidos** en el binario: la imagen final sigue siendo un único
@@ -71,11 +109,11 @@ ejecutable, sin ficheros estáticos ni volúmenes.
 ## Cómo se añade una aplicación nueva
 
 1. **Crear su carpeta**: `<nueva-app>/main.go`, solo cableado (cargar
-   `shared/config`, construir el servidor, arranque y parada ordenada). Copiar
+   `internal/config`, construir el servidor, arranque y parada ordenada). Copiar
    `api-service/main.go` como plantilla.
 2. **Crear su paquete**: `<nueva-app>/internal/<nuevaapp>/` con los handlers y
-   el estado propios. Reutilizar `shared/config` y `shared/identity`; no tocar
-   el `internal/` de otras apps.
+   el estado propios. Reutilizar `internal/config` e `internal/identity` de la
+   raíz; no tocar el `internal/` de otras apps.
 3. **Comprobar en local**: `go build ./... && go vet ./...` y
    `go run ./<nueva-app>`.
 4. **La imagen ya sabe construirla** — el `Containerfile` es único:
