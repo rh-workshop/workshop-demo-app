@@ -245,7 +245,7 @@ APP_VERSION=1.0.0-local go run ./demo-service
 ## Construcción en el cluster
 
 La construye el Pipeline **`ci-build-image`**, definido en
-`workshop-demo-app-config` (`platform/pipelines/`): clona este repositorio,
+`workshop-demo-platform-config` (`workshop-pipelines/`): clona este repositorio,
 construye la imagen con Buildah y la publica en el registro; después actualiza el
 overlay de configuración con el digest recién construido, que es lo que Argo CD
 sincroniza. El pipeline **`cd-deploy-application`** fuerza esa sincronización

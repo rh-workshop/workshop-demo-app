@@ -101,10 +101,18 @@ func (s *Store) Payment(id string) (Payment, bool) {
 	return p, ok
 }
 
+// maxPayments acota el mapa en memoria: las demos de rate-limit bombardean el
+// POST y sin tope la memoria crecería hasta el límite del pod (OOMKilled).
+const maxPayments = 1000
+
 // CreatePayment registra un pago nuevo y devuelve la entidad ya numerada.
-func (s *Store) CreatePayment(from, to string, amountCents int64, currency, concept, requestedBy string) Payment {
+// El segundo valor es false si el almacén alcanzó su capacidad máxima.
+func (s *Store) CreatePayment(from, to string, amountCents int64, currency, concept, requestedBy string) (Payment, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if len(s.payments) >= maxPayments {
+		return Payment{}, false
+	}
 	p := Payment{
 		ID:          fmt.Sprintf("PAY-%03d", s.nextPaymentSeq),
 		FromAccount: from,
@@ -118,5 +126,5 @@ func (s *Store) CreatePayment(from, to string, amountCents int64, currency, conc
 	}
 	s.nextPaymentSeq++
 	s.payments[p.ID] = p
-	return p
+	return p, true
 }

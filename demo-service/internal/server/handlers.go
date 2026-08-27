@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/rh-workshop/workshop-demo-app/internal/identity"
@@ -122,6 +124,16 @@ func (s *Servidor) llamar(w http.ResponseWriter, r *http.Request) {
 	ruta := r.URL.Query().Get("path")
 	if ruta == "" {
 		ruta = "/"
+	}
+	// Anti-SSRF: solo rutas relativas al upstream; sin esto, "path=@evil/x" o
+	// "path=//evil/x" reescriben la autoridad de la URL y la llamada server-side
+	// sale hacia un host arbitrario alcanzable desde el pod.
+	if destino, err := url.Parse(ruta); err != nil || destino.IsAbs() || destino.Host != "" || !strings.HasPrefix(destino.Path, "/") {
+		responder(w, http.StatusBadRequest, map[string]any{
+			"error": "path debe ser una ruta relativa que empiece por \"/\"",
+			"path":  ruta,
+		})
+		return
 	}
 
 	inicio := time.Now()

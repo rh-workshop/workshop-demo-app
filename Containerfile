@@ -15,7 +15,7 @@
 #   · sin secretos horneados en la imagen
 #
 # La construye el Pipeline de Tekton definido en el repositorio
-# workshop-demo-app-config (platform/pipelines), que pasa APP en BUILD_ARGS.
+# workshop-demo-platform-config (workshop-pipelines/), que pasa APP en BUILD_ARGS.
 # ─────────────────────────────────────────────────────────────────────────────
 
 # APP se declara antes del primer FROM para poder reutilizarlo en ambas etapas.

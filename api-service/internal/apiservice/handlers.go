@@ -99,7 +99,15 @@ func (s *Server) createPayment(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		requestedBy = "unknown (sin cabecera x-identidad)"
 	}
-	payment := s.store.CreatePayment(req.FromAccount, req.ToAccount, req.AmountCents, strings.ToUpper(req.Currency), req.Concept, requestedBy)
+	payment, created := s.store.CreatePayment(req.FromAccount, req.ToAccount, req.AmountCents, strings.ToUpper(req.Currency), req.Concept, requestedBy)
+	// El almacén está acotado: al llegar al tope se responde 507 en vez de crecer hasta el OOM del pod.
+	if !created {
+		s.writeJSON(w, http.StatusInsufficientStorage, map[string]any{
+			"identity": envelopeFor(id, ok),
+			"error":    "el almacén en memoria de pagos alcanzó su capacidad máxima",
+		})
+		return
+	}
 	s.paymentsCreated.Add(1)
 
 	w.Header().Set("Location", "/api/v1/payments/"+payment.ID)
