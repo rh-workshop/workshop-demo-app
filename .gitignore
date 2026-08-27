@@ -1,2 +1,9 @@
-# Binario compilado en local (la imagen lo construye el pipeline).
-/demo-service
+# Binarios compilados en local (la imagen la construye el pipeline).
+#
+# NO usar "/demo-service": desde que el repo es un monorepo eso ignora el
+# DIRECTORIO FUENTE del servicio, y cualquier fichero nuevo dentro de él
+# desaparece del commit en silencio — el build produce una imagen sin ese código.
+# Se nombran los binarios uno a uno.
+/demo-service/demo-service
+/api-service/api-service
+/service
