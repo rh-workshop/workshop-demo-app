@@ -1,0 +1,87 @@
+# CI de api-service disparado por Pipelines as Code (PAC).
+#
+# QUE HACE ESTE FICHERO AQUI, EN EL REPO DE APLICACION. Es el reparto de
+# responsabilidades del modelo: el equipo de la APLICACION decide QUE se ejecuta
+# (este PipelineRun: su lenguaje, su imagen destino, sus umbrales), mientras la
+# PLATAFORMA gobierna CON QUE (el Pipeline y las Tasks, que viven en
+# workshop-demo-platform-config) y CON QUE PERMISOS (el ServiceAccount `builder`
+# y el AppProject que lo acota). Cambiar el pipeline es cosa de plataforma;
+# cambiar como se construye esta app, del equipo que la escribe.
+#
+# COMO SE DISPARA. PAC observa este repositorio (CR `Repository` declarado en la
+# plataforma) y, ante un evento de Git, busca los PipelineRun de `.tekton/` y los
+# ejecuta EN EL NAMESPACE donde vive el Repository (workshop-demo-dev), que es
+# donde estan el Pipeline, las Tasks y las credenciales. El resultado vuelve al
+# Pull Request como commit status: eso es lo que permite exigir en GitHub "CI en
+# verde para poder mezclar", que es lo que hace real GitFlow.
+#
+# ANOTACIONES DE PAC:
+#   on-event        — que eventos lo disparan (push y pull_request).
+#   on-target-branch— a que ramas aplica. Aqui: main, develop y release/*.
+#   max-keep-runs   — cuantos PipelineRun conserva; sin esto se acumulan sin fin.
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  name: ci-api-service
+  annotations:
+    pipelinesascode.tekton.dev/on-event: "[push, pull_request]"
+    pipelinesascode.tekton.dev/on-target-branch: "[main, develop, release/*]"
+    pipelinesascode.tekton.dev/max-keep-runs: "10"
+spec:
+  pipelineRef:
+    name: ci-build-image
+  taskRunTemplate:
+    # Identidad de plataforma: es la que tiene los permisos de build y push.
+    serviceAccountName: builder
+  # Cota explicita: un run colgado (registro caido, push bloqueado) no queda vivo para siempre.
+  timeouts:
+    pipeline: 1h0m0s
+  params:
+    # PAC sustituye estas variables con los datos REALES del evento de Git: la
+    # rama que se empujo y el commit exacto. Sin ellas el pipeline construiria
+    # siempre main, ignorando el commit que lo disparo.
+    - name: revision
+      value: "{{revision}}"
+    - name: app-repo
+      value: "{{repo_url}}"
+    # Lenguaje del servicio: selecciona la Task de pruebas (go-test, dotnet-test,
+    # java-test o python-test). Es el unico dato que cambia entre lenguajes.
+    - name: language
+      value: go
+    # Registro destino: la organizacion de DEV, la unica donde el CI puede publicar.
+    - name: image-repository
+      value: company-quay-quay-quay-enterprise.apps.ocp.hq2ss.sandbox3270.opentlc.com/company-dev/api-service
+    # Cual de las apps del monorepo se construye (el Containerfile lo recibe como ARG).
+    - name: build-args
+      value: ["APP=api-service"]
+    - name: overlay-path
+      value: apps/api-service/overlays/dev
+  workspaces:
+    # Codigo fuente y repo de configuracion: volumenes efimeros por ejecucion.
+    - name: source
+      volumeClaimTemplate:
+        spec:
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 1Gi
+    - name: config
+      volumeClaimTemplate:
+        spec:
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 1Gi
+    # Credenciales: todas creadas FUERA de Git, referenciadas por nombre.
+    - name: git-credentials
+      secret:
+        secretName: git-credentials
+    - name: registry-credentials
+      secret:
+        secretName: quay-push-credentials
+    - name: signing-key
+      secret:
+        secretName: cosign-signing-key
+    - name: acs-credentials
+      secret:
+        secretName: acs-pipeline-credentials
