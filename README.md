@@ -255,3 +255,5 @@ La imagen final pesa unos **5,7 MB de binario** sobre UBI mínima: el compilador
 se queda en la etapa de construcción y no viaja al registro ni al cluster.
 
 # PAC: este repositorio dispara su CI desde los eventos de Git (ver .tekton/).
+
+<!-- CI validado el 2026-08-31 -->
