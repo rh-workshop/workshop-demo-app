@@ -29,7 +29,14 @@ metadata:
     pipelinesascode.tekton.dev/max-keep-runs: "10"
 spec:
   pipelineRef:
-    name: ci-build-image
+    # Resolver `cluster`: el Pipeline vive en el cluster (lo despliega Argo desde
+    # el repo de plataforma), NO en este repositorio. Sin el resolver, PAC busca la
+    # definicion aqui dentro y falla con "cannot find referenced pipeline".
+    resolver: cluster
+    params:
+      - {name: kind, value: pipeline}
+      - {name: name, value: ci-build-image}
+      - {name: namespace, value: workshop-demo-dev}
   taskRunTemplate:
     # Identidad de plataforma: es la que tiene los permisos de build y push.
     serviceAccountName: builder
